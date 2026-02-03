@@ -1,5 +1,7 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState, useEffect } from 'react';
 import './App.css';
+
+const API_BASE = 'http://localhost:3000/achats';
 
 type PurchaseFormState = {
   productName: string;
@@ -15,12 +17,23 @@ type FormErrorState = {
   success?: string;
 };
 
+type Purchase = {
+  id: number;
+  product: { id: number; name: string };
+  price: string;
+  purchaseDate: string;
+  createdAt: string;
+};
+
+type Tab = 'add' | 'history';
+
 function App() {
   const today = useMemo(
     () => new Date().toISOString().slice(0, 10),
     [],
   );
 
+  const [activeTab, setActiveTab] = useState<Tab>('add');
   const [form, setForm] = useState<PurchaseFormState>({
     productName: '',
     price: '',
@@ -28,6 +41,36 @@ function App() {
   });
   const [errors, setErrors] = useState<FormErrorState>({});
   const [loading, setLoading] = useState(false);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loadingPurchases, setLoadingPurchases] = useState(false);
+  const [periodStart, setPeriodStart] = useState<string>('');
+  const [periodEnd, setPeriodEnd] = useState<string>(today);
+
+  // Charger les achats quand on est sur l'onglet Historique
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadPurchases();
+    }
+  }, [activeTab, periodStart, periodEnd]);
+
+  const loadPurchases = async () => {
+    setLoadingPurchases(true);
+    try {
+      const params = new URLSearchParams();
+      if (periodStart) params.append('startDate', periodStart);
+      if (periodEnd) params.append('endDate', periodEnd);
+      const url = `${API_BASE}?${params.toString()}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setPurchases(data);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des achats:', error);
+    } finally {
+      setLoadingPurchases(false);
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -103,6 +146,11 @@ function App() {
         price: '',
         purchaseDate: today,
       });
+
+      // Recharger l'historique si on est sur cet onglet
+      if (activeTab === 'history') {
+        loadPurchases();
+      }
     } catch (error) {
       setErrors({
         global:
@@ -111,6 +159,19 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const formatPrice = (price: string) => {
+    return `${parseFloat(price).toFixed(2)} FCFA`;
   };
 
   return (
@@ -123,9 +184,25 @@ function App() {
           </p>
         </header>
 
+        <nav className="nav-tabs">
+          <button
+            className={`nav-tab ${activeTab === 'add' ? 'active' : ''}`}
+            onClick={() => setActiveTab('add')}
+          >
+            ➕ Ajouter un achat
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            📋 Historique
+          </button>
+        </nav>
+
         <main className="app-main">
-          <section className="card">
-            <h2>Ajouter un achat</h2>
+          {activeTab === 'add' && (
+            <section className="card">
+              <h2>Ajouter un achat</h2>
             <p className="card-description">
               Saisissez le nom du produit, son prix et la date d&apos;achat.
             </p>
@@ -221,11 +298,72 @@ function App() {
                 </button>
               </div>
             </form>
-          </section>
+            </section>
+          )}
+
+          {activeTab === 'history' && (
+            <section className="card">
+              <h2>Historique des achats</h2>
+              <p className="card-description">
+                Liste de vos achats triés du plus récent au plus ancien.
+              </p>
+
+              <div className="period-selector">
+                <div className="form-field">
+                  <label htmlFor="periodStart">Date de début (optionnel)</label>
+                  <input
+                    id="periodStart"
+                    type="date"
+                    value={periodStart}
+                    onChange={(e) => setPeriodStart(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="periodEnd">Date de fin (optionnel)</label>
+                  <input
+                    id="periodEnd"
+                    type="date"
+                    max={today}
+                    value={periodEnd}
+                    onChange={(e) => setPeriodEnd(e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              {loadingPurchases ? (
+                <div className="loading">Chargement...</div>
+              ) : purchases.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">📭</div>
+                  <p>Aucun achat à afficher</p>
+                </div>
+              ) : (
+                <div className="history-list">
+                  {purchases.map((purchase) => (
+                    <div key={purchase.id} className="history-item">
+                      <div className="history-item-info">
+                        <div className="history-item-name">
+                          {purchase.product.name}
+                        </div>
+                        <div className="history-item-date">
+                          {formatDate(purchase.purchaseDate)}
+                        </div>
+                      </div>
+                      <div className="history-item-price">
+                        {formatPrice(purchase.price)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </main>
 
         <footer className="app-footer">
-          <span>US-01 · Ajout d&apos;un achat</span>
+          <span>US-01, US-02 · Ajout et Historique</span>
         </footer>
       </div>
     </div>
