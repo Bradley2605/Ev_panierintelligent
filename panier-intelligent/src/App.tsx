@@ -30,7 +30,7 @@ type TopProduct = {
   count: number;
 } | null;
 
-type Tab = 'add' | 'history' | 'top';
+type Tab = 'add' | 'history' | 'top' | 'bilan';
 
 function App() {
   const today = useMemo(
@@ -50,6 +50,9 @@ function App() {
   const [loadingPurchases, setLoadingPurchases] = useState(false);
   const [topProduct, setTopProduct] = useState<TopProduct>(null);
   const [loadingTop, setLoadingTop] = useState(false);
+  const [totalAmount, setTotalAmount] = useState<number>(0);
+  const [loadingBilan, setLoadingBilan] = useState(false);
+  const [purchaseCount, setPurchaseCount] = useState<number>(0);
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>(today);
 
@@ -59,6 +62,8 @@ function App() {
       loadPurchases();
     } else if (activeTab === 'top') {
       loadTopProduct();
+    } else if (activeTab === 'bilan') {
+      loadBilan();
     }
   }, [activeTab, periodStart, periodEnd]);
 
@@ -101,6 +106,35 @@ function App() {
       console.error('Erreur lors du chargement du top produit:', error);
     } finally {
       setLoadingTop(false);
+    }
+  };
+
+  const loadBilan = async () => {
+    setLoadingBilan(true);
+    try {
+      const params = new URLSearchParams();
+      if (periodStart) params.append('startDate', periodStart);
+      if (periodEnd) params.append('endDate', periodEnd);
+      
+      // Charger le total et le nombre d'achats
+      const [bilanResponse, purchasesResponse] = await Promise.all([
+        fetch(`${API_BASE}/bilan?${params.toString()}`),
+        fetch(`${API_BASE}?${params.toString()}`),
+      ]);
+
+      if (bilanResponse.ok) {
+        const data = await bilanResponse.json();
+        setTotalAmount(data.total || 0);
+      }
+
+      if (purchasesResponse.ok) {
+        const purchasesData = await purchasesResponse.json();
+        setPurchaseCount(purchasesData.length || 0);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du bilan:', error);
+    } finally {
+      setLoadingBilan(false);
     }
   };
 
@@ -148,7 +182,7 @@ function App() {
     setErrors({});
 
     try {
-      const response = await fetch('http://localhost:3000/achats', {
+      const response = await fetch(API_BASE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,6 +216,7 @@ function App() {
       // Recharger les données si on est sur les autres onglets
       if (activeTab === 'history') loadPurchases();
       if (activeTab === 'top') loadTopProduct();
+      if (activeTab === 'bilan') loadBilan();
     } catch (error) {
       setErrors({
         global:
@@ -211,7 +246,7 @@ function App() {
         <header className="app-header">
           <h1>🛒 Panier Intelligent</h1>
           <p className="app-subtitle">
-            Enregistrez vos achats rapidement avec un suivi clair
+            Gérez vos achats et analysez vos dépenses facilement
           </p>
         </header>
 
@@ -234,107 +269,113 @@ function App() {
           >
             🏆 Top Produit
           </button>
+          <button
+            className={`nav-tab ${activeTab === 'bilan' ? 'active' : ''}`}
+            onClick={() => setActiveTab('bilan')}
+          >
+            💰 Bilan Financier
+          </button>
         </nav>
 
         <main className="app-main">
           {activeTab === 'add' && (
             <section className="card">
               <h2>Ajouter un achat</h2>
-            <p className="card-description">
-              Saisissez le nom du produit, son prix et la date d&apos;achat.
-            </p>
+              <p className="card-description">
+                Saisissez le nom du produit, son prix et la date d&apos;achat.
+              </p>
 
-            {errors.global && (
-              <div className="alert alert-error">
-                {errors.global}
-              </div>
-            )}
+              {errors.global && (
+                <div className="alert alert-error">
+                  {errors.global}
+                </div>
+              )}
 
-            {errors.success && (
-              <div className="alert alert-success">
-                {errors.success}
-              </div>
-            )}
+              {errors.success && (
+                <div className="alert alert-success">
+                  {errors.success}
+                </div>
+              )}
 
-            <form className="form" onSubmit={handleSubmit} noValidate>
-              <div className="form-field">
-                <label htmlFor="productName">
-                  Nom du produit
-                  <span className="required">*</span>
-                </label>
-                <input
-                  id="productName"
-                  name="productName"
-                  type="text"
-                  placeholder="Ex : Lait, Riz, Pâtes..."
-                  value={form.productName}
-                  onChange={handleChange}
-                  className={errors.productName ? 'input input-error' : 'input'}
-                  autoComplete="off"
-                />
-                {errors.productName && (
-                  <p className="field-error">
-                    {errors.productName}
-                  </p>
-                )}
-              </div>
-
-              <div className="form-row">
+              <form className="form" onSubmit={handleSubmit} noValidate>
                 <div className="form-field">
-                  <label htmlFor="price">
-                    Prix (FCFA)
+                  <label htmlFor="productName">
+                    Nom du produit
                     <span className="required">*</span>
                   </label>
                   <input
-                    id="price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Ex : 1250.00"
-                    value={form.price}
+                    id="productName"
+                    name="productName"
+                    type="text"
+                    placeholder="Ex : Lait, Riz, Pâtes..."
+                    value={form.productName}
                     onChange={handleChange}
-                    className={errors.price ? 'input input-error' : 'input'}
+                    className={errors.productName ? 'input input-error' : 'input'}
+                    autoComplete="off"
                   />
-                  {errors.price && (
+                  {errors.productName && (
                     <p className="field-error">
-                      {errors.price}
+                      {errors.productName}
                     </p>
                   )}
                 </div>
 
-                <div className="form-field">
-                  <label htmlFor="purchaseDate">
-                    Date d&apos;achat
-                    <span className="required">*</span>
-                  </label>
-                  <input
-                    id="purchaseDate"
-                    name="purchaseDate"
-                    type="date"
-                    max={today}
-                    value={form.purchaseDate}
-                    onChange={handleChange}
-                    className={errors.purchaseDate ? 'input input-error' : 'input'}
-                  />
-                  {errors.purchaseDate && (
-                    <p className="field-error">
-                      {errors.purchaseDate}
-                    </p>
-                  )}
-                </div>
-              </div>
+                <div className="form-row">
+                  <div className="form-field">
+                    <label htmlFor="price">
+                      Prix (FCFA)
+                      <span className="required">*</span>
+                    </label>
+                    <input
+                      id="price"
+                      name="price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Ex : 12.50"
+                      value={form.price}
+                      onChange={handleChange}
+                      className={errors.price ? 'input input-error' : 'input'}
+                    />
+                    {errors.price && (
+                      <p className="field-error">
+                        {errors.price}
+                      </p>
+                    )}
+                  </div>
 
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Ajout en cours...' : 'Ajouter'}
-                </button>
-              </div>
-            </form>
+                  <div className="form-field">
+                    <label htmlFor="purchaseDate">
+                      Date d&apos;achat
+                      <span className="required">*</span>
+                    </label>
+                    <input
+                      id="purchaseDate"
+                      name="purchaseDate"
+                      type="date"
+                      max={today}
+                      value={form.purchaseDate}
+                      onChange={handleChange}
+                      className={errors.purchaseDate ? 'input input-error' : 'input'}
+                    />
+                    {errors.purchaseDate && (
+                      <p className="field-error">
+                        {errors.purchaseDate}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={loading}
+                  >
+                    {loading ? 'Ajout en cours...' : 'Ajouter'}
+                  </button>
+                </div>
+              </form>
             </section>
           )}
 
@@ -446,10 +487,59 @@ function App() {
               )}
             </section>
           )}
+
+          {activeTab === 'bilan' && (
+            <section className="card">
+              <h2>Bilan Financier</h2>
+              <p className="card-description">
+                Montant total des dépenses sur la période sélectionnée.
+              </p>
+
+              <div className="period-selector">
+                <div className="form-field">
+                  <label htmlFor="bilanPeriodStart">Date de début (optionnel)</label>
+                  <input
+                    id="bilanPeriodStart"
+                    type="date"
+                    value={periodStart}
+                    onChange={(e) => setPeriodStart(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="bilanPeriodEnd">Date de fin (optionnel)</label>
+                  <input
+                    id="bilanPeriodEnd"
+                    type="date"
+                    max={today}
+                    value={periodEnd}
+                    onChange={(e) => setPeriodEnd(e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              {loadingBilan ? (
+                <div className="loading">Chargement...</div>
+              ) : (
+                <div className="bilan-card">
+                  <div className="bilan-label">Total des dépenses</div>
+                  <div className="bilan-amount">
+                    {totalAmount.toFixed(2)} FCFA
+                  </div>
+                  {purchaseCount > 0 && (
+                    <div style={{ marginTop: '1rem', color: '#6c757d' }}>
+                      {purchaseCount} {purchaseCount > 1 ? 'achats' : 'achat'} sur la période
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
         </main>
 
         <footer className="app-footer">
-          <span>US-01, US-02, US-03 · Ajout, Historique et Top Produit</span>
+          <span>Panier Intelligent - US-01, US-02, US-03, US-04</span>
         </footer>
       </div>
     </div>
