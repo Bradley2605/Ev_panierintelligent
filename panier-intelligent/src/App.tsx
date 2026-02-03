@@ -25,7 +25,12 @@ type Purchase = {
   createdAt: string;
 };
 
-type Tab = 'add' | 'history';
+type TopProduct = {
+  productName: string;
+  count: number;
+} | null;
+
+type Tab = 'add' | 'history' | 'top';
 
 function App() {
   const today = useMemo(
@@ -43,13 +48,17 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loadingPurchases, setLoadingPurchases] = useState(false);
+  const [topProduct, setTopProduct] = useState<TopProduct>(null);
+  const [loadingTop, setLoadingTop] = useState(false);
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>(today);
 
-  // Charger les achats quand on est sur l'onglet Historique
+  // Charger les données selon l'onglet actif
   useEffect(() => {
     if (activeTab === 'history') {
       loadPurchases();
+    } else if (activeTab === 'top') {
+      loadTopProduct();
     }
   }, [activeTab, periodStart, periodEnd]);
 
@@ -69,6 +78,29 @@ function App() {
       console.error('Erreur lors du chargement des achats:', error);
     } finally {
       setLoadingPurchases(false);
+    }
+  };
+
+  const loadTopProduct = async () => {
+    setLoadingTop(true);
+    try {
+      const params = new URLSearchParams();
+      if (periodStart) params.append('startDate', periodStart);
+      if (periodEnd) params.append('endDate', periodEnd);
+      const url = `${API_BASE}/top-produit?${params.toString()}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.message) {
+          setTopProduct(null);
+        } else {
+          setTopProduct({ productName: data.productName, count: data.count });
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du top produit:', error);
+    } finally {
+      setLoadingTop(false);
     }
   };
 
@@ -147,10 +179,9 @@ function App() {
         purchaseDate: today,
       });
 
-      // Recharger l'historique si on est sur cet onglet
-      if (activeTab === 'history') {
-        loadPurchases();
-      }
+      // Recharger les données si on est sur les autres onglets
+      if (activeTab === 'history') loadPurchases();
+      if (activeTab === 'top') loadTopProduct();
     } catch (error) {
       setErrors({
         global:
@@ -196,6 +227,12 @@ function App() {
             onClick={() => setActiveTab('history')}
           >
             📋 Historique
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'top' ? 'active' : ''}`}
+            onClick={() => setActiveTab('top')}
+          >
+            🏆 Top Produit
           </button>
         </nav>
 
@@ -360,10 +397,59 @@ function App() {
               )}
             </section>
           )}
+
+          {activeTab === 'top' && (
+            <section className="card">
+              <h2>Top Produit</h2>
+              <p className="card-description">
+                Le produit le plus acheté sur la période sélectionnée (en nombre d&apos;occurrences).
+              </p>
+
+              <div className="period-selector">
+                <div className="form-field">
+                  <label htmlFor="topPeriodStart">Date de début (optionnel)</label>
+                  <input
+                    id="topPeriodStart"
+                    type="date"
+                    value={periodStart}
+                    onChange={(e) => setPeriodStart(e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="topPeriodEnd">Date de fin (optionnel)</label>
+                  <input
+                    id="topPeriodEnd"
+                    type="date"
+                    max={today}
+                    value={periodEnd}
+                    onChange={(e) => setPeriodEnd(e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              {loadingTop ? (
+                <div className="loading">Chargement...</div>
+              ) : topProduct === null ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">🔍</div>
+                  <p>Aucun produit trouvé pour cette période</p>
+                </div>
+              ) : (
+                <div className="top-product-card">
+                  <div className="top-product-name">{topProduct.productName}</div>
+                  <div className="top-product-count">
+                    Acheté {topProduct.count} {topProduct.count > 1 ? 'fois' : 'fois'}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </main>
 
         <footer className="app-footer">
-          <span>US-01, US-02 · Ajout et Historique</span>
+          <span>US-01, US-02, US-03 · Ajout, Historique et Top Produit</span>
         </footer>
       </div>
     </div>
